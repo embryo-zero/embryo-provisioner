@@ -1,0 +1,119 @@
+/* eslint-disable jquery/no-val */
+/* eslint-disable jquery/no-toggle */
+/* eslint-disable jquery/no-closest */
+/* eslint-disable jquery/no-ready */
+/* eslint-disable jquery/no-each */
+/* eslint-disable jquery/no-is */
+/* eslint-disable jquery/no-show */
+/* eslint-disable jquery/no-class */
+/* eslint-disable jquery/no-serialize */
+/* eslint-disable jquery/no-ajax */
+/* eslint-disable jquery/no-hide */
+
+import $ from 'jquery';
+import { notify } from './foreman_toast_notifications';
+
+export function testConnection(item, url) {
+  $('#test_connection_indicator').show();
+  $(item).addClass('disabled');
+  const data = $('form').serialize();
+  $.ajax({
+    url,
+    type: 'put',
+    data,
+    success({ message }, textstatus, xhr) {
+      notify({ message, type: 'success' });
+    },
+    error({ responseText }) {
+      const error = JSON.parse(responseText).message;
+      notify({ message: error, type: 'danger' });
+    },
+    complete(result) {
+      $('#test_connection_indicator').hide();
+      $(item).removeClass('disabled');
+    },
+  });
+}
+
+export function changeLdapPort(item) {
+  const port = $('#auth_source_ldap_port');
+  const tlsEnabled = $(item).is(':checked');
+
+  if (port.length > 0) {
+    const value = parseInt(port.val(), 10);
+    const defaultPorts = port.data('default-ports');
+    if (
+      !Number.isNaN(value) &&
+      defaultPorts != null &&
+      defaultPorts.ldap != null &&
+      defaultPorts.ldaps != null
+    ) {
+      if (tlsEnabled) {
+        if (value === defaultPorts.ldap) {
+          port.val(defaultPorts.ldaps);
+        }
+      } else if (value === defaultPorts.ldaps) {
+        port.val(defaultPorts.ldap);
+      }
+    }
+  }
+
+  $('#auth_source_ldap_cacert_group').toggle(tlsEnabled);
+
+  if (!tlsEnabled) {
+    $('#auth_source_ldap_cacert').val('');
+  }
+}
+
+function updateLdapAccountHelp(selectedType) {
+  $.each(['account', 'base_dn', 'groups_base'], (index, value) => {
+    const element = $(`#auth_source_ldap_${value}`);
+    const help = element.data('help')[selectedType];
+
+    if (help !== undefined) {
+      element
+        .parents('.form-group')
+        .find('label a[rel=popover]')
+        .attr('data-content', help);
+      element
+        .parents('.form-group')
+        .find('label a[rel=popover]')
+        .show();
+    } else {
+      element
+        .parents('.form-group')
+        .find('label a[rel=popover]')
+        .hide();
+    }
+  });
+}
+
+export function changeLdapServerType() {
+  const type = $('#auth_source_ldap_server_type').val();
+  const membershipType = $('#auth_source_ldap_ldap_group_membership');
+
+  membershipType.closest('.form-group').toggle(type !== 'active_directory');
+
+  if (type !== 'active_directory') {
+    const rfc4519 = $(
+      '#auth_source_ldap_ldap_group_membership option[value="rfc4519"]'
+    );
+
+    if (type !== 'posix') {
+      rfc4519.attr('disabled', 'disabled');
+      if (membershipType.find(':selected').val() === 'rfc4519') {
+        membershipType.val('posix').trigger('change');
+      }
+    } else {
+      rfc4519.removeAttr('disabled');
+    }
+  }
+
+  updateLdapAccountHelp(type);
+}
+
+$(document).ready(() => {
+  if (window.location.pathname.match(/auth_source_ldaps/i)) {
+    changeLdapServerType();
+  }
+});

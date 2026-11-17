@@ -1,0 +1,23 @@
+require 'integration_test_helper'
+
+class LocationJSTest < IntegrationTestWithJavascript
+  let(:unlocalized_host) { FactoryBot.create(:host, location: nil) }
+
+  test "index page" do
+    assert_index_page(locations_path, "Locations", "New Location")
+  end
+
+  # click Proceed to Edit
+  test "create new page when some hosts are and assigned a location and click Proceed to Edit" do
+    unlocalized_host
+    assert_new_button(locations_path, "New Location", new_location_path)
+    fill_in "location_name", :with => "Raleigh"
+    click_button "Submit"
+    # wait for submit to finish
+    page.all('.breadcrumb-item div', text: 'Edit Raleigh')
+    assert_current_path step2_location_path(Location.find_by(name: "Raleigh"))
+    click_link "Proceed to Edit"
+    assert_current_path edit_location_path(Location.find_by(name: "Raleigh"))
+    assert_breadcrumb_text('Edit')
+  end
+end

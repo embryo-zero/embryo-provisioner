@@ -1,0 +1,28 @@
+#!/bin/bash
+dir=/usr/share/foreman/script/foreman-tail.d
+opts="-Fn100"
+
+if [ "$1" == "-h" ]; then
+  man foreman-tail; exit 1
+fi
+if [ "$1" == "-l" ]; then
+  ls $dir | cut -d- -f2; exit 1
+fi
+
+shopt -s nullglob
+files=()
+if [ -z "$1" ]; then
+  files=("$dir"/*)
+else
+  for arg in "$@"; do
+    matches=("$dir"/*-"$arg")
+    if [ ${#matches[@]} -eq 0 ]; then
+      echo "Unknown component: '$arg'" >&2
+      exit 1
+    fi
+    files+=("${matches[@]}")
+  done
+fi
+shopt -u nullglob
+
+tail $opts $(eval echo $(cat "${files[@]}")) 2>/dev/null

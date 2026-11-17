@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE profile>
+<profile xmlns="http://www.suse.com/1.0/yast2ns" xmlns:config="http://www.suse.com/1.0/configns">
+  <general>
+    <mode>
+      <confirm config:type="boolean">false</confirm>
+      <final_reboot config:type="boolean">true</final_reboot>
+    </mode>
+  </general>
+  <networking>
+    <dns>
+      <hostname>snapshot-ipv4-dhcp-el7</hostname>
+      <resolv_conf_policy>auto</resolv_conf_policy>
+      <searchlist config:type="list">
+        <search>snap.example.com</search>
+      </searchlist>
+    </dns>
+    <interfaces config:type="list">
+      <interface>
+        <bootproto>dhcp</bootproto>
+        <device>eth0</device>
+        <usercontrol>no</usercontrol>
+        <startmode>auto</startmode>
+      </interface>
+    </interfaces>
+  </networking>
+  <ntp-client>
+    <configure_dhcp config:type="boolean">false</configure_dhcp>
+    <peers config:type="list">
+      <peer>
+        <address>first.ntp.server</address>
+        <initial_sync config:type="boolean">true</initial_sync>
+        <options></options>
+        <type>server</type>
+      </peer>
+    </peers>
+    <start_at_boot config:type="boolean">true</start_at_boot>
+    <start_in_chroot config:type="boolean">true</start_in_chroot>
+  </ntp-client>
+zerombr
+clearpart --all    --initlabel
+part /boot --fstype ext3 --size=100 --asprimary
+part /     --fstype ext3 --size=1024 --grow
+part swap  --recommended
+  <runlevel>
+    <default>3</default>
+    <services config:type="list">
+      <service>
+        <service_name>sshd</service_name>
+        <service_status>enable</service_status>
+      </service>
+    </services>
+  </runlevel>
+  <software>
+    <base>default</base>
+    <patterns config:type="list">
+      <pattern>base</pattern>
+      <pattern>enhanced_base</pattern>
+      <pattern>sw_management</pattern>
+      <pattern>yast2_basis</pattern>
+    </patterns>
+    <packages config:type="list">
+      <package>rubygem-puppet</package>
+    </packages>
+  </software>
+  <users config:type="list">
+    <user>
+      <username>root</username>
+      <encrypted config:type="boolean">true</encrypted>
+      <fullname>root</fullname>
+      <gid>0</gid>
+      <home>/root</home>
+      <shell>/bin/bash</shell>
+      <uid>0</uid>
+      <user_password>$1$rtd8Ub7R$5Ohzuy8WXlkaK9cA2T1wb0</user_password>
+    </user>
+  </users>
+  <scripts>
+    <chroot-scripts config:type="list">
+      <script>
+        <filename>cp-resolv.sh</filename>
+        <chrooted config:type="boolean">false</chrooted>
+        <interpreter>shell</interpreter>
+        <notification>Copying resolv.conf into chroot ...</notification>
+        <source><![CDATA[
+cp /etc/resolv.conf /mnt/etc
+]]>
+        </source>
+      </script>
+      <script>
+        <filename>foreman.sh</filename>
+        <chrooted config:type="boolean">true</chrooted>
+        <interpreter>shell</interpreter>
+        <notification>Setting up Puppet / Foreman ...</notification>
+        <source><![CDATA[
+/bin/hostname snapshot-ipv4-dhcp-el7
+
+
+
+# Select package manager for the OS (sets the $PKG_MANAGER* variables)
+if [ -z "$PKG_MANAGER" ]; then
+  if [ -f /etc/os-release ] ; then
+    . /etc/os-release
+  fi
+  
+  if [ "${NAME%.*}" = 'FreeBSD' ]; then
+    PKG_MANAGER='pkg'
+    PKG_MANAGER_INSTALL="${PKG_MANAGER} install -y"
+    PKG_MANAGER_REMOVE="${PKG_MANAGER} delete -y"
+    PKG_MANAGER_UPGRADE="${PKG_MANAGER} install -y"
+    PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} upgrade -y"
+  elif [ -f /etc/fedora-release -o -f /etc/redhat-release -o -f /etc/amazon-linux-release -o -f /etc/system-release ]; then
+    PKG_MANAGER='dnf'
+    if [ -f /etc/redhat-release -a "${VERSION_ID%.*}" -le 7 ]; then
+      PKG_MANAGER='yum'
+    elif [ x$ID = xamzn -a "${VERSION_ID%.*}" -le 2 ]; then
+      PKG_MANAGER='yum'
+    fi
+    PKG_MANAGER_INSTALL="${PKG_MANAGER} install -y"
+    PKG_MANAGER_REMOVE="${PKG_MANAGER} remove -y"
+    PKG_MANAGER_UPGRADE="${PKG_MANAGER} upgrade -y"
+    if [ "$PKG_MANAGER" = 'dnf' ]; then
+      PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} upgrade -y"
+    else
+      PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} update -y"
+    fi
+  elif [ -f /etc/debian_version ]; then
+    PKG_MANAGER='apt-get'
+    PKG_MANAGER_INSTALL="${PKG_MANAGER} -o 'Dpkg::Options::=--force-confdef' -o 'Dpkg::Options::=--force-confold' install -y"
+    PKG_MANAGER_REMOVE="${PKG_MANAGER} -o 'Dpkg::Options::=--force-confdef' -o 'Dpkg::Options::=--force-confold' remove -y"
+    PKG_MANAGER_UPGRADE="${PKG_MANAGER} -o 'Dpkg::Options::=--force-confdef' -o 'Dpkg::Options::=--force-confold' --only-upgrade install -y"
+    PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} -o 'Dpkg::Options::=--force-confdef' -o 'Dpkg::Options::=--force-confold' -o APT::Get::Upgrade-Allow-New='true' upgrade -y"
+  elif [ -f /etc/arch-release ]; then
+    PKG_MANAGER='pacman'
+    PKG_MANAGER_INSTALL="${PKG_MANAGER} --noconfirm -S"
+    PKG_MANAGER_REMOVE="${PKG_MANAGER} --noconfirm -R"
+    PKG_MANAGER_UPGRADE="${PKG_MANAGER} --noconfirm -S"
+    PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} --noconfirm -Syu"
+  elif [ x$ID = xopensuse-tumbleweed -o x$ID = xsles ]; then
+    PKG_MANAGER='zypper'
+    PKG_MANAGER_INSTALL="${PKG_MANAGER} --non-interactive install --auto-agree-with-licenses"
+    PKG_MANAGER_REMOVE="${PKG_MANAGER} --non-interactive remove"
+    PKG_MANAGER_UPGRADE="${PKG_MANAGER} --non-interactive update"
+    PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} --non-interactive update"
+  fi
+fi
+
+
+
+echo "blacklist amodule" >> /etc/modprobe.d/blacklist.conf
+
+
+if [ -f /usr/bin/dnf ]; then
+  dnf -y install puppet
+else
+  yum -t -y install puppet
+fi
+
+cat > /etc/puppet/puppet.conf << EOF
+[main]
+vardir = /var/lib/puppet
+logdir = /var/log/puppet
+rundir = /var/run/puppet
+ssldir = \$vardir/ssl
+
+[agent]
+pluginsync      = true
+report          = true
+certname        = snapshot-ipv4-dhcp-el7
+
+EOF
+
+
+puppet_unit=puppet
+/usr/bin/systemctl list-unit-files | grep -q puppetagent && puppet_unit=puppetagent
+/usr/bin/systemctl enable ${puppet_unit}
+
+# export a custom fact called 'is_installer' to allow detection of the installer environment in Puppet modules
+export FACTER_is_installer=true
+# passing a non-existent tag like "no_such_tag" to the puppet agent only initializes the node
+# You can select specific tag(s) with the "run-puppet-in-installer-tags" parameter
+# or set a full puppet run by setting "run-puppet-in-installer" = true
+echo "Performing initial puppet run for --tags no_such_tag"
+/usr/bin/puppet agent --config /etc/puppet/puppet.conf --onetime --tags no_such_tag  --no-daemonize
+
+
+
+
+if [ -x /usr/bin/curl ]; then
+  /usr/bin/curl -o /dev/null -H 'Content-Type: text/plain' --fail --noproxy \* --silent 'http://foreman.example.com/unattended/built'
+elif [ -x /usr/bin/wget ]; then
+  /usr/bin/wget -q -O /dev/null --method POST --header 'Content-Type: text/plain' --no-proxy 'http://foreman.example.com/unattended/built'
+else
+  wget -q -O /dev/null --header 'Content-Type: text/plain' 'http://foreman.example.com/unattended/built'
+fi
+FINAL_STATUS=$?
+
+if [ -x "$(command -v subscription-manager)" ] ; then
+  subscription-manager facts --update
+  SUB_MAN_STATUS=$?
+
+  if [ $FINAL_STATUS -eq 0 ]; then
+    FINAL_STATUS=$SUB_MAN_STATUS
+  fi
+fi
+
+(exit $FINAL_STATUS);
+
+rm /etc/resolv.conf
+]]>
+        </source>
+      </script>
+    </chroot-scripts>
+  </scripts>
+  <keyboard>
+    <keymap>english-us</keymap>
+  </keyboard>
+  <timezone>
+    <hwclock>UTC</hwclock>
+    <timezone>Etc/UTC</timezone>
+  </timezone>
+  <add-on>
+    <add_on_others config:type="list">
+    </add_on_others>
+  </add-on>
+</profile>

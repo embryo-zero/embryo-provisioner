@@ -1,0 +1,37 @@
+[[adding-js-dependencies]]
+= NPM dependencies
+:toc: right
+:toclevels: 5
+
+## Using/Adding/Updating NPM dependencies
+
+Foreman manages NPM dependencies directly in `package.json`. Dependencies are shared with plugins via Webpack https://webpack.js.org/concepts/module-federation/[Module Federation], so plugins don't need to bundle their own copies of shared libraries.
+
+### Adding a new dependency
+
+1. Add the package to `package.json` (use `dependencies` for runtime packages, `devDependencies` for build/test-only tools):
++
+```sh
+npm install <package-name>
+```
+
+2. If the package needs to be available to plugins (i.e. shared between core and plugin webpack bundles), add its name to `config/webpack.vendor.js`.
+
+3. Run `npm install` if you haven't already.
+
+### How it works
+
+* `config/webpack.vendor.js` lists packages that are bundled into the vendor chunk and shared via Module Federation.
+* The webpack config (`config/webpack.config.js`) reads all dependencies from `package.json` and declares them as `shared` modules with `singleton: true`. Core loads them eagerly so they are available to plugins.
+* Plugins import shared dependencies normally (e.g. `import React from 'react'`). Webpack Module Federation resolves them from core's shared scope at runtime.
+
+### Excluding packages from the build
+
+`package-exclude.json` lists NPM packages and prefixes that are not needed to compile webpack assets (e.g. test utilities, linters, storybook). The `script/filter-package-json.py` script strips them from `package.json` before the RPM build so they don't need to be packaged. When adding a dev-only dependency that isn't required for the webpack build, add it here.
+
+After adding or updating a dependency, a corresponding change in https://github.com/theforeman/foreman-packaging[foreman-packaging] is usually needed to add or update the RPM spec for the new NPM package.
+
+### Common pitfalls
+
+* **`Shared module X doesn't exist in shared scope default`** — you added a package to `package.json` but forgot to add it to `config/webpack.vendor.js`.
+* **`Uncaught ReferenceError: __webpack_exports__ is not defined`** — wrong entry point in `config/webpack.vendor.js`. Some packages need a subpath (e.g. `@scalprum/core/index` instead of `@scalprum/core`).

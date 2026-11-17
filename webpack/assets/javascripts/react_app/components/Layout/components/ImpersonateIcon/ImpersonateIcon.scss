@@ -1,0 +1,37 @@
+@import "../../../../common/variables";
+
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.blink-image {
+  cursor: pointer;
+  -moz-animation: blink normal 1s infinite ease-in-out; /* Firefox */
+  -webkit-animation: blink normal 1s infinite ease-in-out; /* Webkit */
+  -ms-animation: blink normal 1s infinite ease-in-out; /* IE */
+  animation: blink normal 1s infinite ease-in-out; /* Opera and prob css3 final iteration */
+}
+
+#foreman-page .pf-v5-c-masthead {
+  .stop-impersonation-icon {
+    padding: 0;
+  }
+
+  .nav-item-iconic .blink-image {
+    color: $color-pf-gold-200;
+  }
+
+  .nav-item-iconic:hover .blink-image {
+    color: $color-pf-gold-200;
+  }
+}

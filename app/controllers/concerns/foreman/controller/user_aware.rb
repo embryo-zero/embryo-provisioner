@@ -1,0 +1,22 @@
+module Foreman::Controller::UserAware
+  extend ActiveSupport::Concern
+  include Foreman::Controller::AuthorizedUser
+
+  included do
+    before_action :find_user
+  end
+
+  private
+
+  def resource_scope(...)
+    super.where(:user => @user)
+  end
+
+  def find_user
+    if editing_self?
+      @user = User.current
+    else
+      @user = User.find(params[:user_id])
+    end
+  end
+end

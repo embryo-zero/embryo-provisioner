@@ -1,0 +1,473 @@
+/* eslint-disable no-var*/
+'use strict';
+
+var path = require('path');
+var webpack = require('webpack');
+const dotenv = require('dotenv');
+const root = path.resolve(__dirname, '..');
+dotenv.config();
+var StatsWriterPlugin = require('webpack-stats-plugin').StatsWriterPlugin;
+var vendorEntry = require('./webpack.vendor');
+var fs = require('fs');
+const { ModuleFederationPlugin } = require('webpack').container;
+var pluginUtils = require('../script/plugin_webpack_directories');
+var {
+  generateExportsFile,
+} = require('../webpack/assets/javascripts/exportAll');
+var CompressionPlugin = require('compression-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+
+const packageJsonPath = path.resolve(root, 'package.json');
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+const dependencies = packageJson.dependencies || {};
+const devDependencies = packageJson.devDependencies || {};
+const allDependencies = { ...dependencies, ...devDependencies };
+const shared = isPlugin => {
+  const sharedArr = Object.keys(allDependencies).map(dep => ({
+    [dep]: {
+      eager: !isPlugin, // core should load all dependencies eagerly so they will be available for plugins
+      singleton: true,
+      requiredVersion: allDependencies[dep],
+      import: isPlugin ? false : dep,
+    },
+  }));
+  return [
+    ...sharedArr,
+    {
+      /*
+      have to use '@scalprum/core/index' in vendor.js entry otherwise we get
+      Uncaught ReferenceError: __webpack_exports__ is not defined
+      but without need to "convert" @scalprum/core/index to @scalprum/core
+      so the shared context can find it
+      */
+      '@scalprum/react-core': {
+        eager: !isPlugin,
+        singleton: true,
+        import: isPlugin ? false : '@scalprum/react-core/index',
+        packageName: '@scalprum/react-core',
+      },
+    },
+    {
+      '@scalprum/core': {
+        eager: !isPlugin,
+        singleton: true,
+        import: isPlugin ? false : '@scalprum/core/index',
+        import: '@scalprum/core/index',
+        packageName: '@scalprum/core',
+      },
+    },
+  ];
+};
+
+class AddRuntimeRequirement {
+  // to avoid "webpackRequire.l is not a function" error
+  // enables use of webpack require inside promise new promise
+  apply(compiler) {
+    compiler.hooks.compilation.tap('AddRuntimeRequirement', compilation => {
+      const { RuntimeGlobals } = compiler.webpack;
+      compilation.hooks.additionalModuleRuntimeRequirements.tap(
+        'AddRuntimeRequirement',
+        (module, set) => {
+          set.add(RuntimeGlobals.loadScript);
+        }
+      );
+    });
+  }
+}
+
+const supportedLocales = () => {
+  const localeDir = path.join(root, 'locale');
+
+  // Find all files in ./locale/*
+  const localesFiles = fs.readdirSync(localeDir);
+
+  // Return only folders
+  return localesFiles.filter(f =>
+    fs.statSync(path.join(localeDir, f)).isDirectory()
+  );
+};
+
+const supportedLanguages = () => {
+  // Extract extract languages from the language tags (strip off dialects)
+  return [...new Set(supportedLocales().map(d => d.split('_')[0]))];
+};
+
+const supportedLanguagesRE = new RegExp(
+  `/(${supportedLanguages().join('|')})$`
+);
+
+const commonConfig = function(buildName = 'core', tsConfig = 'tsconfig.json') {
+  var production =
+    process.env.RAILS_ENV === 'production' ||
+    process.env.NODE_ENV === 'production';
+  const mode = production ? 'production' : 'development';
+  const config = {};
+
+  if (production) {
+    config.devtool = 'source-map';
+    config.optimization = {
+      moduleIds: 'named',
+      splitChunks: false,
+    };
+  } else {
+    config.devtool = 'eval-cheap-module-source-map';
+    config.optimization = {
+      splitChunks: false,
+      removeAvailableModules: false,
+      removeEmptyChunks: false,
+    };
+
+    config.cache = {
+      type: 'filesystem',
+      maxAge: 604800000, // one week
+      version: '1.0',
+      cacheDirectory: path.resolve(root, '.webpack_cache'),
+      compression: false,
+      name: `${buildName}-${mode}`,
+      store: 'pack',
+      buildDependencies: {
+        config: [__filename],
+      },
+    };
+  }
+  return {
+    ...config,
+    mode,
+    resolve: {
+      fallback: {
+        path: require.resolve('path-browserify'),
+        os: require.resolve('os-browserify'),
+      },
+      alias: {
+        'patternfly-react$': path.resolve(
+          root,
+          'node_modules/patternfly-react/dist/js/index.js'
+        ), // to avoid circular dependency in dist/esm
+        '/node_modules/jquery': path.resolve(
+          root,
+          'webpack/assets/javascripts/jquery.js'
+        ),
+        jquery: path.resolve(root, 'webpack/assets/javascripts/jquery.js'),
+        foremanReact: path.join(
+          root,
+          '/webpack/assets/javascripts/react_app'
+        ),
+        'react/jsx-runtime': 'react/jsx-runtime.js', // for react-dnd
+        'react/jsx-dev-runtime': 'react/jsx-dev-runtime.js', // for react-dnd
+        'datatables.net': path.resolve(
+          root,
+          'node_modules/datatables.net/js/jquery.dataTables.js'
+        ), // otherwise we get datatables.net-bs Cannot read properties of undefined (reading 'classes') since dataTables.mjs is a module.
+      },
+      extensions: ['.ts', '.tsx', '.js', '.jsx'],
+    },
+    resolveLoader: {
+      modules: [path.resolve(root, 'node_modules')],
+    },
+    module: {
+      rules: [
+        {
+          test: /\.tsx?$/,
+          exclude: /node_modules(?!\/(@novnc|unidiff))/,
+          loader: 'ts-loader',
+          options: {
+            configFile: tsConfig,
+            ...(production && {
+              compilerOptions: {
+                moduleResolution: 'node',
+                baseUrl: '.',
+                paths: {
+                  '*': [
+                    '/usr/lib/node_modules/@types/*',
+                    '/usr/lib/node_modules/*',
+                    path.resolve(root, 'node_modules/@types/*'),
+                    path.resolve(root, 'node_modules/*')
+                  ]
+                },
+                types: [],
+                typeRoots: [],
+                skipLibCheck: true,
+                skipDefaultLibCheck: true,
+              },
+              transpileOnly: false,
+              onlyCompileBundledFiles: true,
+            })
+          },
+        },
+        {
+          test: /\.js$/,
+          /* Include novnc, unidiff in webpack, transpiling is needed for phantomjs (which does not support ES6) to run tests
+          unidiff can be removed once https://github.com/mvoss9000/unidiff/pull/1 is merged */
+          exclude: /node_modules(?!\/(@novnc|unidiff))/,
+          loader: 'babel-loader',
+          options: {
+            presets: [path.resolve(root, 'webpack/babel')],
+          },
+        },
+        {
+          test: /\.(png|gif|svg)$/,
+          type: 'asset',
+          parser: {
+            dataUrlCondition: {
+              maxSize: 32767,
+            },
+          },
+        },
+        {
+          test: /\.(graphql|gql)$/,
+          exclude: /node_modules/,
+          loader: 'graphql-tag/loader',
+        },
+      ],
+    },
+    plugins: [
+      new webpack.DefinePlugin({
+        'process.env': {
+          NODE_ENV: JSON.stringify(mode),
+          NOTIFICATIONS_POLLING: process.env.NOTIFICATIONS_POLLING,
+          REDUX_LOGGER: process.env.REDUX_LOGGER,
+        },
+      }),
+      // limit locales from intl only to supported ones
+      new webpack.ContextReplacementPlugin(
+        /intl\/locale-data\/jsonp/,
+        supportedLanguagesRE
+      ),
+      // limit locales from react-intl only to supported ones
+      new webpack.ContextReplacementPlugin(
+        /react-intl\/locale-data/,
+        supportedLanguagesRE
+      ),
+      new AddRuntimeRequirement(),
+      new CompressionPlugin(),
+    ],
+    stats: process.env.WEBPACK_STATS || 'normal',
+  };
+};
+
+const coreConfig = function() {
+  var config = commonConfig('core');
+  var manifestFilename = 'manifest.json';
+  var bundleEntry = path.join(root, 'webpack/assets/javascripts/bundle.js');
+  config.context = path.resolve(root);
+  if (config.mode == 'production') {
+    var chunkFilename = '[name]-[chunkhash].js';
+  } else {
+    var chunkFilename = '[name].js';
+  }
+
+  config.entry = {
+    /* keep bundle entry files and reactExports seperate to avoid late loading issues of mixed files, import in react_app only from react_app and node_modules */
+    bundle: { import: bundleEntry, dependOn: ['vendor', 'reactExports'] },
+    reactExports: {
+      import: path.join(
+        root,
+        'webpack/assets/javascripts/all_react_app_exports.js'
+      ),
+      dependOn: 'vendor',
+    },
+    vendor: vendorEntry,
+    vendorStyles: path.join(
+      root,
+      'webpack/assets/javascripts/react_app/common/scss/vendor-core.scss'
+    ),
+  };
+  config.output = {
+    path: path.join(root, 'public', 'webpack'),
+    publicPath: '/webpack/',
+    library: {
+      name: ['TheForeman', '[name]'],
+      type: 'var',
+    },
+    filename: chunkFilename,
+  };
+  var plugins = config.plugins;
+
+  plugins.push(new MiniCssExtractPlugin());
+  plugins.push(
+    new ModuleFederationPlugin({
+      name: 'foremanReact',
+      shared: shared(false),
+    })
+  );
+  plugins.push(
+    new StatsWriterPlugin({
+      filename: manifestFilename,
+    })
+  );
+  plugins.push(new MiniCssExtractPlugin());
+  config.plugins = plugins;
+  var rules = config.module.rules;
+
+  rules.push({
+    test: /\.(sa|sc|c)ss$/,
+    exclude: /vendor-core/i,
+    use: [
+      {
+        loader: 'style-loader',
+        options: {
+          injectType: 'singletonStyleTag',
+          attributes: { id: 'foreman_core_css' },
+        },
+      },
+      'css-loader',
+      'sass-loader',
+    ],
+  });
+  rules.push({
+    test: /vendor-core/i,
+    use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
+  });
+  config.module.rules = rules;
+  return config;
+};
+
+const pluginConfig = function(plugin) {
+  const pluginRoot = plugin.root;
+  const pluginName = plugin.name.replace('-', '_'); // module federation doesnt like -
+  const tsConfigPath = path.join(pluginRoot, 'tsconfig.json')
+  let config;
+  if (fs.existsSync(tsConfigPath)) {
+    config = commonConfig(pluginName, tsConfigPath);
+  }
+  else {
+    config = commonConfig(pluginName);
+  }
+  config.context = path.join(pluginRoot, 'webpack');
+  config.entry = {};
+
+  function convertImportStatement(importStatement) {
+    const importPath = importStatement;
+    const importPathParts = importPath.split('/');
+    const newImportName = importPathParts.slice(1).join('_');
+    return newImportName;
+  }
+  config.externals = function({ request }, callback) {
+    if (/^foremanReact(\/.*)?$/.test(request)) {
+      const prefix = 'var TheForeman.reactExports.';
+      const newPath =
+        prefix +
+        convertImportStatement(request.substring('foremanReact'.length));
+      return callback(null, newPath);
+    }
+    return callback();
+  };
+  var pluginEntries = {
+    './index': path.resolve(pluginRoot, 'webpack', 'index'),
+  };
+  plugin.entries.filter(Boolean).forEach(entry => {
+    pluginEntries[`./${entry}_index`] = path.resolve(
+      pluginRoot,
+      'webpack',
+      `${entry}_index`
+    );
+  });
+
+  if (config.mode == 'production') {
+    var outputPath = path.join(pluginRoot, 'public', 'webpack', pluginName);
+    var chunkFilename = '[name]-[chunkhash].js';
+  } else {
+    var outputPath = path.join(
+      root,
+      'public',
+      'webpack',
+      pluginName
+    );
+    var chunkFilename = '[name].js';
+  }
+  config.output = {
+    path: outputPath,
+    publicPath: '/webpack/' + pluginName + '/',
+    filename: chunkFilename,
+    uniqueName: pluginName,
+  };
+  var configModules = config.resolve.modules || [];
+  // make webpack to resolve modules from core first
+  configModules.unshift(path.resolve(root, 'node_modules'));
+  // add plugin's node_modules to the reslver list
+  configModules.push(path.resolve(pluginRoot, 'node_modules'));
+  configModules.push('node_modules/');
+  config.resolve.modules = configModules;
+
+  //get the list of webpack plugins
+  var plugins = config.plugins;
+
+  plugins.push(
+    new ModuleFederationPlugin({
+      name: pluginName,
+      filename: pluginName + '_remoteEntry.js',
+      exposes: pluginEntries,
+      shared: shared(true),
+    })
+  );
+
+  config.plugins = plugins;
+  var rules = config.module.rules;
+  rules.push({
+    test: /\.(sa|sc|c)ss$/,
+    use: [
+      {
+        loader: 'style-loader',
+        options: {
+          injectType: 'singletonStyleTag',
+          attributes: { id: `${pluginName}_css` },
+        },
+      },
+      'css-loader',
+      'sass-loader',
+    ],
+  });
+  config.module.rules = rules;
+
+  return config;
+};
+
+module.exports = function(env, argv) {
+  generateExportsFile();
+  const { pluginName } = env;
+  var pluginsDirs = pluginUtils.getPluginDirs('pipe');
+  var pluginsInfo = {};
+  var pluginsConfigEnv = [];
+  var pluginDirKeys = Object.keys(pluginsDirs.plugins);
+  if (pluginName) {
+    pluginDirKeys = pluginDirKeys.filter(key => key.includes(pluginName));
+  }
+  pluginDirKeys.forEach(pluginDirKey => {
+    const parts = pluginDirKey.split(':');
+    const name = parts[0];
+    const entry = parts[1];
+    if (pluginsInfo[name]) {
+      pluginsInfo[name].entries.push(entry);
+    } else {
+      pluginsInfo[name] = {
+        name,
+        entries: [entry],
+        root: pluginsDirs.plugins[pluginDirKey].root,
+      };
+    }
+    if (!pluginDirKey.includes(':')) {
+      const keysWithExtras = pluginDirKeys.filter(key =>
+        key.includes(pluginDirKey + ':')
+      );
+      // for example: {global: true, routes: true}
+      const pluginExtras = keysWithExtras.map(key => ({
+        [key.split(':')[1]]: true,
+      }));
+      pluginsConfigEnv.push({
+        plugin: {
+          ...pluginExtras,
+          name: pluginDirKey,
+          root: pluginsDirs.plugins[pluginDirKey].root,
+        },
+      });
+    }
+  });
+  let configs = [];
+  const pluginsInfoValues = Object.values(pluginsInfo);
+  if (pluginsInfoValues.length > 0) {
+    configs = pluginsInfoValues.map(plugin => pluginConfig(plugin));
+  }
+  if (pluginName) return configs;
+
+  return [coreConfig(env, argv), ...configs];
+};

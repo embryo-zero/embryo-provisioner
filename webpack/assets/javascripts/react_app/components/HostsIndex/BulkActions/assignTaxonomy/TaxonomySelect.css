@@ -1,0 +1,22 @@
+div#mismatch-radio-container {
+  display: flex;
+  align-items: baseline;
+  margin-top: 1em;
+
+  div .pf-v5-c-radio__input {
+    position: relative;
+    top: -0.2em;
+  }
+}
+
+.taxonomy-name-parent {
+  color: var(--pf-v5-global--disabled-color--100);
+}
+
+.taxonomy-name-parent::after {
+  content: '>';
+  margin: 0 0.4em;
+  font-weight: normal;
+  color: var(--pf-v5-global--disabled-color--100);
+  vertical-align: middle;
+}

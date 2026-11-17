@@ -1,0 +1,125 @@
+
+#cloud-config
+hostname: snapshot-ipv4-dhcp-deb10
+fqdn: snapshot-ipv4-dhcp-deb10
+manage_etc_hosts: true
+users: []
+chpasswd:
+  expire: False
+  users:
+  - {name: root, password: $1$rtd8Ub7R$5Ohzuy8WXlkaK9cA2T1wb0}
+runcmd:
+- |
+  echo "snapshot-ipv4-dhcp-deb10" > /etc/hostname
+  
+  hostname snapshot-ipv4-dhcp-deb10
+  
+  cat > /etc/hosts << EOF
+  127.0.0.1   snapshot-ipv4-dhcp-deb10 snapshot-ipv4-dhcp-deb10 localhost localhost.localdomain
+  ::1     ip6-localhost ip6-loopback
+  fe00::0 ip6-localnet
+  ff00::0 ip6-mcastprefix
+  ff02::1 ip6-allnodes
+  ff02::2 ip6-allrouters
+  EOF
+- |
+  
+- |
+  
+  echo "Updating system time"
+              apt-get install -y chrony
+        sed -i -E 's|^pool .*|server first.ntp.server iburst|' /etc/chrony/chrony.conf
+        systemctl enable --now chrony
+        [ -f /usr/sbin/hwclock ] && /usr/sbin/hwclock --systohc
+- |
+  
+  # Select package manager for the OS (sets the $PKG_MANAGER* variables)
+  if [ -z "$PKG_MANAGER" ]; then
+    if [ -f /etc/os-release ] ; then
+      . /etc/os-release
+    fi
+    
+    if [ "${NAME%.*}" = 'FreeBSD' ]; then
+      PKG_MANAGER='pkg'
+      PKG_MANAGER_INSTALL="${PKG_MANAGER} install -y"
+      PKG_MANAGER_REMOVE="${PKG_MANAGER} delete -y"
+      PKG_MANAGER_UPGRADE="${PKG_MANAGER} install -y"
+      PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} upgrade -y"
+    elif [ -f /etc/fedora-release -o -f /etc/redhat-release -o -f /etc/amazon-linux-release -o -f /etc/system-release ]; then
+      PKG_MANAGER='dnf'
+      if [ -f /etc/redhat-release -a "${VERSION_ID%.*}" -le 7 ]; then
+        PKG_MANAGER='yum'
+      elif [ x$ID = xamzn -a "${VERSION_ID%.*}" -le 2 ]; then
+        PKG_MANAGER='yum'
+      fi
+      PKG_MANAGER_INSTALL="${PKG_MANAGER} install -y"
+      PKG_MANAGER_REMOVE="${PKG_MANAGER} remove -y"
+      PKG_MANAGER_UPGRADE="${PKG_MANAGER} upgrade -y"
+      if [ "$PKG_MANAGER" = 'dnf' ]; then
+        PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} upgrade -y"
+      else
+        PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} update -y"
+      fi
+    elif [ -f /etc/debian_version ]; then
+      PKG_MANAGER='apt-get'
+      PKG_MANAGER_INSTALL="${PKG_MANAGER} -o 'Dpkg::Options::=--force-confdef' -o 'Dpkg::Options::=--force-confold' install -y"
+      PKG_MANAGER_REMOVE="${PKG_MANAGER} -o 'Dpkg::Options::=--force-confdef' -o 'Dpkg::Options::=--force-confold' remove -y"
+      PKG_MANAGER_UPGRADE="${PKG_MANAGER} -o 'Dpkg::Options::=--force-confdef' -o 'Dpkg::Options::=--force-confold' --only-upgrade install -y"
+      PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} -o 'Dpkg::Options::=--force-confdef' -o 'Dpkg::Options::=--force-confold' -o APT::Get::Upgrade-Allow-New='true' upgrade -y"
+    elif [ -f /etc/arch-release ]; then
+      PKG_MANAGER='pacman'
+      PKG_MANAGER_INSTALL="${PKG_MANAGER} --noconfirm -S"
+      PKG_MANAGER_REMOVE="${PKG_MANAGER} --noconfirm -R"
+      PKG_MANAGER_UPGRADE="${PKG_MANAGER} --noconfirm -S"
+      PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} --noconfirm -Syu"
+    elif [ x$ID = xopensuse-tumbleweed -o x$ID = xsles ]; then
+      PKG_MANAGER='zypper'
+      PKG_MANAGER_INSTALL="${PKG_MANAGER} --non-interactive install --auto-agree-with-licenses"
+      PKG_MANAGER_REMOVE="${PKG_MANAGER} --non-interactive remove"
+      PKG_MANAGER_UPGRADE="${PKG_MANAGER} --non-interactive update"
+      PKG_MANAGER_UPGRADE_ALL_PACKAGES="${PKG_MANAGER} --non-interactive update"
+    fi
+  fi
+  
+
+- |
+  echo "blacklist amodule" >> /etc/modprobe.d/blacklist.conf
+
+- |
+  apt-get update
+  apt-get install -y puppet
+  
+  cat > /etc/puppet/puppet.conf << EOF
+  [main]
+  vardir = /var/lib/puppet
+  logdir = /var/log/puppet
+  rundir = /var/run/puppet
+  ssldir = \$vardir/ssl
+  
+  [agent]
+  pluginsync      = true
+  report          = true
+  certname        = snapshot-ipv4-dhcp-deb10
+  
+  EOF
+  
+  
+  if [ -f "/etc/default/puppet" ]
+  then
+  /bin/sed -i 's/^START=no/START=yes/' /etc/default/puppet
+  fi
+  /usr/bin/puppet agent --enable
+  
+  # export a custom fact called 'is_installer' to allow detection of the installer environment in Puppet modules
+  export FACTER_is_installer=true
+  # passing a non-existent tag like "no_such_tag" to the puppet agent only initializes the node
+  # You can select specific tag(s) with the "run-puppet-in-installer-tags" parameter
+  # or set a full puppet run by setting "run-puppet-in-installer" = true
+  echo "Performing initial puppet run for --tags no_such_tag"
+  /usr/bin/puppet agent --config /etc/puppet/puppet.conf --onetime --tags no_such_tag  --no-daemonize
+  systemctl enable puppet
+
+phone_home:
+  url: http://foreman.example.com/unattended/built
+  post: []
+  tries: 10

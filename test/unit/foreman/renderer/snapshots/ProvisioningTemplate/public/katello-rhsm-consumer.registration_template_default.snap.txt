@@ -1,0 +1,73 @@
+#!/bin/bash
+
+set -e
+export LC_ALL=C LANG=C
+
+KATELLO_SERVER="foreman.example.com"
+
+is_debian() {
+  [ -r /etc/os-release ] || return 1
+
+  . /etc/os-release || return 1
+
+  case " ${ID:-} ${ID_LIKE:-} " in
+    *" debian "*|*" ubuntu "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+
+# Define the path to rhsm.conf
+RHSM_CFG=/etc/rhsm/rhsm.conf
+
+
+
+# Prepare subscription-manager
+if ! [ -x "$(command -v subscription-manager)" ] ; then
+  exit 1
+else
+  echo "subscription-manager is already installed!"
+  
+fi
+
+# Check if rhsm.conf exists
+if ! [ -f $RHSM_CFG ] ; then
+  echo "'$RHSM_CFG' not found, cannot configure subscription-manager"
+    exit 1
+fi
+
+
+# Configure subscription-manager
+test -f $RHSM_CFG.bak || cp $RHSM_CFG $RHSM_CFG.bak
+subscription-manager config \
+  --server.hostname="" \
+  --server.port="" \
+  --server.prefix="" \
+  --rhsm.repo_ca_cert="" \
+  --rhsm.baseurl="" \
+  --rhsm.manage_repos=1
+
+# Older versions of subscription manager may not recognize
+# report_package_profile and package_profile_on_trans options.
+# So set them separately and redirect out & error to /dev/null
+# to fail silently.
+subscription-manager config --rhsm.package_profile_on_trans=1 > /dev/null 2>&1 || true
+subscription-manager config --rhsm.report_package_profile=1 > /dev/null 2>&1 || true
+
+# Configuration for EL6
+if grep --quiet full_refresh_on_yum $RHSM_CFG; then
+  sed -i "s/full_refresh_on_yum\s*=.*$/full_refresh_on_yum = 1/g" $RHSM_CFG
+else
+  full_refresh_config="#config for on-premise management\nfull_refresh_on_yum = 1"
+  sed -i "/baseurl/a $full_refresh_config" $RHSM_CFG
+fi
+
+# Restart yggdrasild if installed and running
+systemctl try-restart yggdrasil >/dev/null 2>&1 || true
+
+# Debian-based systems fetch content from the deb endpoint
+if is_debian; then
+  subscription-manager config --rhsm.baseurl="https://$KATELLO_SERVER/pulp/deb"
+fi
+
+exit 0

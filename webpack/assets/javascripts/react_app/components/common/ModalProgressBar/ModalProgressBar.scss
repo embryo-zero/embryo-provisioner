@@ -1,0 +1,17 @@
+#modal-progress-bar {
+  min-height: 100px;
+}
+
+// Needed to display modal within a container
+.modal-container {
+  position: relative;
+
+  .modal,
+  .modal-backdrop {
+    position: absolute;
+  }
+
+  &.modal-open {
+    z-index: 0;
+  }
+}

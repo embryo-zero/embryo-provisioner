@@ -1,0 +1,66 @@
+require 'integration_test_helper'
+
+class UserIntegrationTest < IntegrationTestWithJavascript
+  # intermittent failures:
+  #   UserIntegrationTest.test_0002_edit page
+
+  test "index page" do
+    assert_index_page(users_path, "Users", "Create User")
+  end
+
+  test "edit page" do
+    visit users_path
+    click_link "one"
+    fill_in "user_firstname", :with => "user12345"
+    assert_submit_button(users_path)
+    assert page.has_content? 'user12345'
+  end
+
+  test "disable a user from index page" do
+    user = FactoryBot.create(:user, :with_mail)
+    visit users_path
+    within(:xpath, "//tr[contains(.,'#{user.login}')]") do
+      find("a.dropdown-toggle").click
+      click_link("Disable")
+    end
+    click_button("Confirm")
+
+    assert page.has_content?('Successfully updated'), "Expected success flash message"
+    assert user.reload.disabled?, "User should be disabled"
+  end
+
+  test "enable a disabled user from index page" do
+    user = FactoryBot.create(:user, :with_mail, :disabled => true)
+    visit users_path
+    within(:xpath, "//tr[contains(.,'#{user.login}')]") do
+      find("a.dropdown-toggle").click
+      click_link("Enable")
+    end
+    click_button("Confirm")
+
+    assert page.has_content?('Successfully updated'), "Expected success flash message"
+    refute user.reload.disabled?, "User should be enabled"
+  end
+
+  context "without automatic login" do
+    test "login" do
+      login_user(users(:admin).login, "secret")
+    end
+  end
+
+  test "create new user" do
+    visit users_path
+    click_link "Create User"
+    assert fill_in "user_login", :with => "new_user"
+    find(select2_selector('user_auth_source_id'), visible: false).ancestor('.select2-container').click
+    all(".select2-results__option").find do |result|
+      result.text == 'INTERNAL'
+    end.click
+    assert click_button("Submit")
+    assert page.has_content?("can't be blank")
+    assert fill_in "user_password", :with => "123456"
+    assert fill_in "password_confirmation", :with => "123456"
+    assert_submit_button(users_path)
+    assert find_link('new_user').visible?
+  end
+end

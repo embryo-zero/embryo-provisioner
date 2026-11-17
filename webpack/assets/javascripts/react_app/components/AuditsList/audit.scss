@@ -1,0 +1,122 @@
+@import '../../common/colors';
+
+#audit-list {
+  .additional-info-item {
+    font-weight: 600;
+
+    @media only screen and (min-width: 768px) {
+      &.item-name{
+        text-align: right;
+        margin-inline-end: 10px;
+      }
+    }
+
+  }
+
+  .audits-list-actions {
+    min-width: 115px;
+  }
+
+  .audits-list-item-row:hover {
+    background-color: $list-color;
+    cursor: pointer;
+  }
+
+  .pf-m-expanded {
+    border: 1px solid var(--pf-v5-global--BorderColor--100);
+    box-shadow: var(--pf-v5-global--BoxShadow--sm);
+    margin-bottom: 5px;
+
+    .audits-list-item-row {
+      background-color: #def3ff;
+    }
+  }
+
+  .gray-text {
+    color: var(--pf-v5-global--disabled-color--100);
+  }
+
+  .data-list-content {
+    .grid-container {
+      .details-row {
+        border: 1px solid $details-row;
+        margin-top: 15px;
+      }
+
+      .comment-section {
+        p {
+          margin-left: 10px;
+          margin-right: 15px;
+        }
+
+        .comment-title {
+          margin-top: 10px;
+        }
+      }
+
+      .table-inline-changes {
+        margin-top: 10px;
+      }
+
+      .table-changes {
+        margin-top: 15px;
+
+        td {
+          p {
+            margin: 0 15px;
+          }
+        }
+      }
+
+      .table-changes,
+      .table-inline-changes {
+        word-break: break-word;
+        font-weight: 600;
+
+        td {
+          padding: 5px;
+        }
+
+        td:first-child {
+          padding-left: 30px;
+        }
+      }
+
+      .table-hover > tbody > tr:hover,
+      .table-hover > tbody > tr:hover > td {
+        border: 1px solid $pf-border-gray;
+      }
+
+      .table-hover > tbody > tr:hover,
+      .table-hover > tbody > tr:hover > td:first-child {
+        background-color: $pf-color-white;
+      }
+
+      .show-old {
+        background-color: $old-value-table-view;
+      }
+
+      .show-new {
+        background-color: $new-value-table-view;
+      }
+
+      .table-inline-changes.table-hover.show-new > tbody > tr:hover > td,
+      .table-inline-changes.table-hover.show-new > tbody > tr:hover > th {
+        background-color: $new-value-table-view;
+      }
+
+      .table-inline-changes.table-hover.show-old > tbody > tr:hover > td,
+      .table-inline-changes.table-hover.show-old > tbody > tr:hover > th {
+        background-color: $old-value-table-view;
+      }
+
+      .editor-section {
+        margin-top: 15px;
+
+        .editor.ace_editor {
+          border: 1px solid $pf-border-gray;
+        }
+      }
+    }
+  }
+}

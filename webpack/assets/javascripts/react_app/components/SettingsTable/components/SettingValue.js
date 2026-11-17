@@ -1,0 +1,59 @@
+import React from 'react';
+import PropTypes from 'prop-types';
+import { sprintf, translate as __ } from '../../../common/I18n';
+import {
+  hasDefault,
+  withTooltip,
+  defaultToString,
+  isEmptyValue,
+  valueToString,
+} from '../SettingsTableHelpers';
+
+const innerCell = props => {
+  const { setting } = props;
+
+  let field = (
+    <div className={isEmptyValue(setting.value) ? 'empty-value' : ''}>
+      {valueToString(setting)}
+    </div>
+  );
+
+  if (setting.value !== setting.default && hasDefault(setting))
+    field = <strong>{field}</strong>;
+  return field;
+};
+
+const SettingValue = ({ setting }) => {
+  const fieldProps = {
+    setting,
+    tooltipId: setting.name,
+  };
+
+  if (setting.readonly && setting.configFile) {
+    fieldProps.tooltipText = sprintf(
+      __(
+        'This setting is defined in the configuration file %s and is read-only.'
+      ),
+      setting.configFile
+    );
+  } else if (setting.readonly) {
+    fieldProps.tooltipText = __('This setting is read-only.');
+  } else {
+    const defaultStr = defaultToString(setting);
+    fieldProps.tooltipText = sprintf(__('Default: %s'), defaultStr);
+  }
+
+  const Component = withTooltip(innerCell);
+  return <Component {...fieldProps} />;
+};
+
+SettingValue.propTypes = {
+  setting: PropTypes.object.isRequired,
+  className: PropTypes.string,
+};
+
+SettingValue.defaultProps = {
+  className: '',
+};
+
+export default SettingValue;

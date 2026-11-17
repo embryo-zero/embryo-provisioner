@@ -1,0 +1,56 @@
+$connector-color: $color-pf-black-300;
+$connector-offset: 15px;
+$connector-radius: 10px;
+
+.mail_notification_options {
+  margin-bottom: 1em;
+}
+
+.mail_notification_option {
+  position: relative;
+  top: -6px;
+  left: 20%;
+
+  --connector-tick: 17px;
+
+  &.checkbox-inline {
+    --connector-tick: 13px;
+  }
+
+  &::before {
+    content: "";
+    position: absolute;
+    left: -$connector-offset;
+    top: -$connector-offset;
+    bottom: 0;
+    border-left: 1px solid $connector-color;
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: -$connector-offset;
+    top: var(--connector-tick);
+    width: $connector-offset;
+    border-bottom: 1px solid $connector-color;
+  }
+
+  &:last-child {
+    &::before {
+      bottom: auto;
+      height: calc(#{$connector-offset} + var(--connector-tick) + 1px);
+      width: $connector-offset;
+      border-bottom: 1px solid $connector-color;
+      border-radius: 0 0 0 $connector-radius;
+    }
+
+    &::after {
+      content: none;
+    }
+  }
+}
+
+#audit_summary_query_builder {
+  display: block;
+  width: 80%;
+}

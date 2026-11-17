@@ -1,0 +1,18 @@
+$caption_font_weight: 600;
+$background_image: url('../LoginPage/background.svg');
+
+#login-page {
+  min-height: 100vh;
+
+  .login-pf {
+    min-height: 100vh;
+    background: none;
+    background-image: $background_image;
+    background-size: contain;
+    background-repeat: repeat-y;
+  }
+}
+
+#login-page .pf-v5-c-login__footer p {
+  overflow-wrap: break-word;
+}

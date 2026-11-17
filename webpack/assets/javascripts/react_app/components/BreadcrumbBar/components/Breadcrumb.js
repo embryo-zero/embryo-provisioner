@@ -1,0 +1,98 @@
+import React from 'react';
+import PropTypes from 'prop-types';
+import classNames from 'classnames';
+import {
+  Breadcrumb as PfBreadcrumb,
+  BreadcrumbItem,
+  TextContent,
+  Text,
+  Truncate,
+} from '@patternfly/react-core';
+import './Breadcrumbs.scss';
+
+const Breadcrumb = ({
+  items,
+  isTitle,
+  titleReplacement,
+  children,
+  ...props
+}) => {
+  if (isTitle) {
+    return (
+      <TextContent>
+        <Text ouiaId="breadcrumb_title" component="h1">
+          {items[0].caption}
+        </Text>
+      </TextContent>
+    );
+  }
+
+  return (
+    <PfBreadcrumb {...props}>
+      {items.map((item, index) => {
+        const active = index === items.length - 1;
+        const { caption, url, onClick } = item;
+        const { icon, text } = caption || {};
+
+        const overrideTitle = active && titleReplacement;
+        const itemTitle = overrideTitle || text || caption || '';
+
+        if (!icon && !itemTitle) return null;
+
+        const inner = active ? (
+          <Truncate content={itemTitle} tooltipPosition="bottom" />
+        ) : (
+          itemTitle
+        );
+
+        return (
+          <BreadcrumbItem
+            key={index}
+            isActive={active}
+            onClick={onClick}
+            to={url}
+            className={classNames('breadcrumb-item', {
+              active,
+              'breadcrumb-item-with-icon': icon && active,
+            })}
+            {...{ item }}
+          >
+            {icon && <img src={icon.url} alt={icon.alt} title={icon.alt} />}{' '}
+            {inner}
+            {active && children}
+          </BreadcrumbItem>
+        );
+      })}
+    </PfBreadcrumb>
+  );
+};
+
+Breadcrumb.propTypes = {
+  children: PropTypes.node,
+  titleReplacement: PropTypes.string,
+  isTitle: PropTypes.bool,
+  items: PropTypes.arrayOf(
+    PropTypes.shape({
+      caption: PropTypes.oneOfType([
+        PropTypes.string.isRequired,
+        PropTypes.shape({
+          icon: PropTypes.shape({
+            url: PropTypes.string,
+            alt: PropTypes.string,
+          }),
+          text: PropTypes.string,
+        }),
+      ]),
+      url: PropTypes.string,
+    })
+  ),
+};
+
+Breadcrumb.defaultProps = {
+  children: null,
+  isTitle: false,
+  items: [],
+  titleReplacement: null,
+};
+
+export default Breadcrumb;

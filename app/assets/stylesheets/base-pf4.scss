@@ -1,0 +1,68 @@
+// stylelint-disable foreman/no-bare-element-selectors
+// stylelint-disable foreman/no-root-pf-overrides
+
+/*
+  This file exists to make pf3 compatible with pf4.
+  When migrating from pf3 to pf4, some styles might be removable.
+*/
+
+/*
+  Basic fonts and colors overrides
+ */
+html {
+  font-family: sans-serif;
+  line-height: 1.15;
+  font-size: unset !important;
+}
+
+body {
+  font-family: var(--pf-v5-global--FontFamily--text);
+  font-size: var(--pf-v5-global--FontSize--sm);
+  font-weight: var(--pf-v5-global--FontWeight--normal);
+  line-height: var(--pf-v5-global--LineHeight--md);
+  text-align: left;
+  --pf-v5-c-page--BackgroundColor: var(--pf-v5-global--BackgroundColor--100);
+}
+
+a {
+  font-weight: var(--pf-v5-global--link--FontWeight);
+  color: var(--pf-v5-global--link--Color);
+  text-decoration: var(--pf-v5-global--link--TextDecoration);
+
+  &:hover {
+    --pf-v5-global--link--Color: var(--pf-v5-global--link--Color--hover);
+    --pf-v5-global--link--TextDecoration: var(
+      --pf-v5-global--link--TextDecoration--hover
+    );
+  }
+}
+
+/*
+  PF3-Tables overrides
+ */
+.table {
+  & > thead,
+  & > tbody,
+  & > tfoot {
+    & > tr {
+      // fix line-height to be compatible with pf4 fonts
+      & > th,
+      & > td {
+        line-height: inherit;
+      }
+      // fix headers to be bold
+      & > th a {
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+.pf-v5-c-alert {
+  line-height: var(--pf-v5-global--LineHeight--md);
+
+  h4 {
+    margin: 0;
+    line-height: var(--pf-v5-global--LineHeight--md);
+  }
+}
